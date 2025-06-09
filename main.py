@@ -9,6 +9,6 @@ class Sistemainvestimento:
         #container tela
         self.container = tk.frame.Frame(root)
         self.container.pack(fill="both", expand=True) 
-     # PULAR DA PONTA AS 23:99 
-     #Zappeline PRESENTE
-     
+
+
+#OLA MUNDOA  
