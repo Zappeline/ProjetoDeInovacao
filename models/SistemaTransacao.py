@@ -1,7 +1,7 @@
 class SistemaTransacao:
     def __init__(self, preco_total):
-        self.preco_total = preco_total
-    
+        self.preco_total = preco_total,
+        
     
     def dividir_em_semanas(self):
         semanas = []
@@ -10,5 +10,8 @@ class SistemaTransacao:
                 preco = self.preco_total * 0.03
             else:
                 preco = self.preco_total * 0.015
-            semanas.append(Semana(i, preco))
+            semanas.append("semana"(i, preco))
         return semanas
+    
+    
+    
