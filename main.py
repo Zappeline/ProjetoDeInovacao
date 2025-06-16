@@ -1,10 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from models.Imoveis import Imoveis
-
-"""from models.Usuarios import Usuarios"""
-"""from models.DBService import banco_dados
-"""
+from models.Imoveis import Imoveis, Semanas
+from models.DBService import Usuario
+from models.DBService import criar_usuarios
 
 class Sistemainvestimento:
     def __init__(self, root):
@@ -32,7 +30,7 @@ class Sistemainvestimento:
             self.telas[telas] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
-        # --- Configuração inicial das telas ---
+        
         self.configurar_tela_login()
         self.configurar_tela_cadastro()
         self.configurar_tela_principal()
@@ -44,7 +42,7 @@ class Sistemainvestimento:
         self.configurar_tela_listar_imovel2()
         
         # --- Inicia mostrando a tela de login ---
-        self.mostrar_tela("tela_principal")
+        self.mostrar_tela("tela_login")
 
     def mostrar_tela(self, nome_tela):
         tela = self.telas[nome_tela]
@@ -52,51 +50,68 @@ class Sistemainvestimento:
 
     def configurar_tela_login(self):
         tela_login = self.telas["tela_login"]
-        frame_login = tk.Frame(tela_login)
+        frame_login = tk.Frame(tela_login, bg="#f0f0f0", padx=30, pady=30, relief="groove", bd=2)
         frame_login.place(relx=0.5, rely=0.5, anchor="center")
 
-        titulo = tk.Label(frame_login, text="Login", font=("Arial", 16, "bold"))
-        titulo.grid(row=0, column=0, columnspan=2, pady=10)
+        titulo = tk.Label(frame_login, text="Login", font=("Arial", 18, "bold"), bg="#f0f0f0", fg="#333333")
+        titulo.grid(row=0, column=0, columnspan=2, pady=15)
 
-        tk.Label(frame_login, text="CPF:").grid(row=1, column=0, sticky="e", pady=5, padx=5)
-        self.cpf_login = tk.Entry(frame_login, width=20)
-        self.cpf_login.grid(row=1, column=1, sticky="w", pady=5, padx=5)
+        tk.Label(frame_login, text="CPF:", font=("Arial", 12), bg="#f0f0f0").grid(row=1, column=0, sticky="e", pady=8, padx=5)
+        self.cpf_login_entry = tk.Entry(frame_login, width=30, font=("Arial", 12), relief="solid", bd=1)
+        self.cpf_login_entry.grid(row=1, column=1, sticky="w", pady=8, padx=5)
 
-        tk.Label(frame_login, text="Senha:").grid(row=2, column=0, sticky="e", pady=5, padx=5)
-        self.senha_login = tk.Entry(frame_login, width=20, show="*")
-        self.senha_login.grid(row=2, column=1, sticky="w", pady=5, padx=5)
+        tk.Label(frame_login, text="Senha:", font=("Arial", 12), bg="#f0f0f0").grid(row=2, column=0, sticky="e", pady=8, padx=5)
+        self.senha_login_entry = tk.Entry(frame_login, width=30, show="*", font=("Arial", 12), relief="solid", bd=1)
+        self.senha_login_entry.grid(row=2, column=1, sticky="w", pady=8, padx=5)
+        
+        teste = tk.Button(frame_login, text="testaai", command=(self.processar_cadastro))
+        teste.grid(row=2, column=0, columnspan=1, pady=12, sticky="ew")
+        
+        btn_logar = tk.Button(frame_login, text="Entrar", command=self.processar_login,
+                              font=("Arial", 13, "bold"), bg="#4CAF50", fg="white", relief="raised", bd=3, width=20)
+        btn_logar.grid(row=3, column=0, columnspan=2, pady=15, sticky="ew")
 
-        btn_logar = tk.Button(frame_login, text="Entrar", command=lambda: self.mostrar_tela("tela_principal"))
-        btn_logar.grid(row=3, column=0, columnspan=2, pady=10, sticky="ew")
-
-        btn_cadastrar = tk.Button(frame_login, text="Não tem conta? Cadastre-se agora!", command=lambda: self.mostrar_tela("tela_cadastro"))
-        btn_cadastrar.grid(row=4, column=0, columnspan=2, pady=5, sticky="ew")
-
+        btn_cadastrar = tk.Button(frame_login, text="Não tem conta? Cadastre-se agora!", command=lambda: self.mostrar_tela("tela_cadastro"),
+                                  font=("Arial", 10), bg="#2196F3", fg="white", relief="flat", bd=0)
+        btn_cadastrar.grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
+        
+    def processar_cadastro(self):
+        nome = self.entrada_nome.get()
+        contato = self.entrada_contato.get()
+        cpf = self.entrada_cpf.get()
+        senha = self.entrada_senha.get()
+        novo_usuario = criar_usuarios(nome, contato, cpf, senha)
+        if novo_usuario:
+            messagebox.showinfo("Sucesso", f"Usuário '{novo_usuario.nome}' cadastrado!")
+        else:
+            messagebox.showerror("Erro", "Não foi possível cadastrar o usuário.")
     def configurar_tela_cadastro(self):
         tela_cadastro = self.telas["tela_cadastro"]
-        frame_cadastro = tk.Frame(tela_cadastro)
+        frame_cadastro = tk.Frame(tela_cadastro, bg="#f0f0f0", padx=30, pady=30, relief="groove", bd=2)
         frame_cadastro.place(relx=0.5, rely=0.5, anchor="center")
-        
-        titulo = tk.Label(frame_cadastro, text="Cadastro de Novo Usuário", font=("Arial", 16, "bold"))
-        titulo.grid(row=0, column=0, columnspan=2, pady=10)
-        
-        tk.Label(frame_cadastro, text="Nome Completo:").grid(row=1, column=0, sticky="e", pady=5, padx=5)
-        self.nome_cadastro = tk.Entry(frame_cadastro, width=25)
-        self.nome_cadastro.grid(row=1, column=1, sticky="w", pady=5, padx=5)
 
-        tk.Label(frame_cadastro, text="CPF:").grid(row=2, column=0, sticky="e", pady=5, padx=5)
-        self.cpf_cadastro = tk.Entry(frame_cadastro, width=25)
-        self.cpf_cadastro.grid(row=2, column=1, sticky="w", pady=5, padx=5)
+        titulo = tk.Label(frame_cadastro, text="Cadastro de Novo Usuário", font=("Arial", 18, "bold"), bg="#f0f0f0", fg="#333333")
+        titulo.grid(row=0, column=0, columnspan=2, pady=15)
 
-        tk.Label(frame_cadastro, text="Senha:").grid(row=3, column=0, sticky="e", pady=5, padx=5)
-        self.senha_cadastro = tk.Entry(frame_cadastro, width=25, show="*")
-        self.senha_cadastro.grid(row=3, column=1, sticky="w", pady=5, padx=5)
-        
-        btn_cadastrar = tk.Button(frame_cadastro, text="Finalizar Cadastro", command=self.cadastrar_usuario)
-        btn_cadastrar.grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
+        tk.Label(frame_cadastro, text="Nome Completo:", font=("Arial", 12), bg="#f0f0f0").grid(row=1, column=0, sticky="e", pady=8, padx=5)
+        self.nome_cadastro_entry = tk.Entry(frame_cadastro, width=30, font=("Arial", 12), relief="solid", bd=1)
+        self.nome_cadastro_entry.grid(row=1, column=1, sticky="w", pady=8, padx=5)
 
-        btn_voltar = tk.Button(frame_cadastro, text="Voltar para Login", command=lambda: self.mostrar_tela("tela_login"))
-        btn_voltar.grid(row=5, column=0, columnspan=2, pady=5, sticky="ew")
+        tk.Label(frame_cadastro, text="CPF:", font=("Arial", 12), bg="#f0f0f0").grid(row=2, column=0, sticky="e", pady=8, padx=5)
+        self.cpf_cadastro_entry = tk.Entry(frame_cadastro, width=30, font=("Arial", 12), relief="solid", bd=1)
+        self.cpf_cadastro_entry.grid(row=2, column=1, sticky="w", pady=8, padx=5)
+
+        tk.Label(frame_cadastro, text="Senha:", font=("Arial", 12), bg="#f0f0f0").grid(row=3, column=0, sticky="e", pady=8, padx=5)
+        self.senha_cadastro_entry = tk.Entry(frame_cadastro, width=30, show="*", font=("Arial", 12), relief="solid", bd=1)
+        self.senha_cadastro_entry.grid(row=3, column=1, sticky="w", pady=8, padx=5)
+
+        btn_cadastrar = tk.Button(frame_cadastro, text="Finalizar Cadastro", command=self.cadastrar_usuario,
+                                  font=("Arial", 13, "bold"), bg="#FF9800", fg="white", relief="raised", bd=3, width=20)
+        btn_cadastrar.grid(row=4, column=0, columnspan=2, pady=15, sticky="ew")
+
+        btn_voltar = tk.Button(frame_cadastro, text="Voltar para Login", command=lambda: self.mostrar_tela("tela_login"),
+                               font=("Arial", 10), bg="#607D8B", fg="white", relief="flat", bd=0)
+        btn_voltar.grid(row=5, column=0, columnspan=2, pady=10, sticky="ew")
     
     def configurar_tela_principal(self):
         tela_principal = self.telas["tela_principal"]
@@ -117,6 +132,28 @@ class Sistemainvestimento:
 
         btn_sair = tk.Button(frame_principal, text="Sair", command=lambda: self.mostrar_tela("tela_login"))
         btn_sair.grid(row=2, column=0, columnspan=3, pady=20)
+        
+    def cadastrar_usuario(self):
+        nome = self.nome_cadastro_entry.get()
+        cpf = self.cpf_cadastro_entry.get()
+        senha = self.senha_cadastro_entry.get()
+
+        if not nome or not cpf or not senha:
+            messagebox.showerror("Erro de Cadastro", "Todos os campos são obrigatórios.")
+            return
+
+        if cpf in banco_dados_simulado["usuarios"]:
+            messagebox.showerror("Erro de Cadastro", "CPF já cadastrado. Tente outro CPF ou faça login.")
+            return
+
+        try:
+            novo_usuario = Usuario(nome, cpf, senha)
+            banco_dados_simulado["usuarios"][cpf] = novo_usuario
+            messagebox.showinfo("Sucesso", f"Usuário {nome} cadastrado com sucesso!")
+            self.mostrar_tela("tela_login")
+        except Exception as e:
+            messagebox.showerror("Erro Inesperado", f"Não foi possível cadastrar o usuário: {str(e)}")
+        
 
     def configurar_tela_perfil(self):
         tela_perfil = self.telas["tela_perfil"]
@@ -221,14 +258,14 @@ class Sistemainvestimento:
         titulo = tk.Label(frame_listar, text="Semanas Disponíveis - Pastelzinho quentinho", font=("Arial", 16, "bold"))
         titulo.pack(pady=10)
         
-        # NEM SEI COMO FAZER ISSO HAHAHAHHAHAHH
+       
         colunas = ('semana', 'periodo', 'valor')
         tabela = ttk.Treeview(frame_listar, columns=colunas, show='headings')
         tabela.heading('semana', text='Semana Nº')
         tabela.heading('periodo', text='Período')
         tabela.heading('valor', text='Valor da Cota (R$)')
         
-        #MUDA BURRO HAHAHAHAHAHHAHAH
+    
         semanas_imovel2 = [
             ('28', '12/07 - 19/07', '35.000,00'),
             ('29', '19/07 - 26/07', '35.000,00'),
