@@ -1,160 +1,176 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import os
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import declarative_base, sessionmaker
+from db_operations import (
+    criar_usuario_db, verificar_login_db, atualizar_contato_usuario_db,
+    get_semanas_disponiveis, comprar_semana_db, get_transacoes_usuario_db,
+    inicializar_dados_imoveis, desfazer_compra_semana_db
+)
+from validador import is_cpf_valido, is_nome_valido, is_contato_valido
 
-
-
-engine = create_engine(f'sqlite:///', echo=False) 
-
-
-Base = declarative_base()
-
-
-class Usuario(Base):
-    """Representa a tabela 'Usuario' no banco de dados."""
-    __tablename__ = "usuarios"
-
-    id = Column(Integer, primary_key=True)
-    nome = Column(String(100), nullable=False)
-    cpf = Column(String(14), nullable=False, unique=True)
-    contato = Column(String(50), nullable=False)
-    senha = Column(String(50), nullable=False)
-
-    def __repr__(self):
-        return f"<Usuario(nome='{self.nome}', cpf='{self.cpf}')>"
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-def criar_usuario_db(nome, cpf, contato, senha):
-    """Cria e salva um novo usuário no banco de dados."""
-    session = Session()
-    try:
-        usuario_existente = session.query(Usuario).filter_by(cpf=cpf).first()
-        if usuario_existente:
-            return None, "CPF já cadastrado."
-
-        novo_usuario = Usuario(nome=nome, cpf=cpf, contato=contato, senha=senha)
-        session.add(novo_usuario)
-        session.commit()
-        return novo_usuario, "Usuário cadastrado com sucesso!"
-    except Exception as e:
-        session.rollback()
-        return None, f"Erro ao criar usuário: {e}"
-    finally:
-        session.close()
-
-def verificar_login_db(cpf, senha):
-    session = Session()
-    try:
-        usuario = session.query(Usuario).filter_by(cpf=cpf).first()
-        if usuario and usuario.senha == senha:
-            return usuario
-        return None
-    finally:
-        session.close()
 class Sistemainvestimento:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sistema de Investimento Fracionado")
-        self.root.geometry("700x500")
+        self.root.title("INVESTFACIL - Sistema de Investimento Fracionado")
+        self.root.geometry("900x650") 
+        self.root.minsize(800, 600) 
         self.root.resizable(True, True)
-
-        self.container = tk.Frame(root)
+        self.current_user = None
+        self.setup_styles()
+        self.container = ttk.Frame(root, style="Main.TFrame")
         self.container.pack(fill="both", expand=True)
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
-
         self.telas = {}
         telas_a_criar = (
             "tela_login", "tela_cadastro", "tela_principal", "tela_perfil",
-            "tela_investimento", "tela_imovel1", "tela_imovel2",
-            "tela_listar_imovel1", "tela_listar_imovel2"
+            "tela_investimento", "tela_imovel1", "tela_imovel2", "tela_imovel3",
+            "tela_listar_imovel1", "tela_listar_imovel2", "tela_listar_imovel3"
         )
 
         for nome_tela in telas_a_criar:
-            frame = tk.Frame(self.container, bg="#f0f0f0") # Cor de fundo padrão
+            frame = ttk.Frame(self.container, style="Content.TFrame")
             self.telas[nome_tela] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
         self.configurar_todas_as_telas()
         self.mostrar_tela("tela_login")
+        inicializar_dados_imoveis() 
+
+    def setup_styles(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+
+        
+        self.primary_color = "#4CAF50" # verde
+        self.secondary_color = "#2196F3" # azul
+        self.accent_color = "#FFC107" # laranja
+        self.background_color = "#f0f2f5" # azul claro
+        self.card_background = "#ffffff" # branco
+        self.light_text = "#ffffff" # branco
+        self.dark_text = "#333333" # cinza
+        self.border_color = "#e0e0e0" # cinza claro
+        self.error_color = "#F44336" # vermelho
+        self.info_color = "#607D8B" # blue
+
+        
+        style.configure("Main.TFrame", background=self.background_color)
+        style.configure("Content.TFrame", background=self.background_color)
+        style.configure("Card.TFrame", background=self.card_background, relief="flat", borderwidth=1, bordercolor=self.border_color)
+        style.map("Card.TFrame",
+            background=[('active', self.card_background)], 
+            bordercolor=[('active', self.border_color)]
+        )
+
+        
+        style.configure("TLabel", background=self.background_color, foreground=self.dark_text, font=("Segoe UI", 11))
+        style.configure("Title.TLabel", font=("Segoe UI", 24, "bold"), foreground=self.primary_color, background=self.background_color)
+        style.configure("Subtitle.TLabel", font=("Segoe UI", 16, "bold"), foreground=self.dark_text, background=self.background_color)
+        style.configure("Heading.TLabel", font=("Segoe UI", 12, "bold"), foreground=self.dark_text, background=self.card_background)
+        style.configure("Info.TLabel", font=("Segoe UI", 11), foreground=self.dark_text, background=self.card_background)
+        style.configure("SmallInfo.TLabel", font=("Segoe UI", 9), foreground="#666666", background=self.card_background)
+
+        
+        style.configure("TEntry", fieldbackground=self.card_background, borderwidth=1, relief="solid", font=("Segoe UI", 11), padding=5)
+        style.map("TEntry", fieldbackground=[('focus', '#e8f0fe')]) # Subtle highlight on focus
+
+        
+        style.configure("TButton",
+            font=("Segoe UI", 11, "bold"),
+            background=self.primary_color, foreground=self.light_text,
+            relief="flat", borderwidth=0, padding=(15, 10),
+            focusthickness=0
+        )
+        style.map("TButton",
+            background=[('active', self.secondary_color), ('pressed', self.dark_text)],
+            foreground=[('active', self.light_text), ('pressed', self.light_text)]
+        )
+        style.configure("Primary.TButton", background=self.primary_color, foreground=self.light_text)
+        style.configure("Secondary.TButton", background=self.secondary_color, foreground=self.light_text)
+        style.configure("Accent.TButton", background=self.accent_color, foreground=self.dark_text) 
+        style.configure("Danger.TButton", background=self.error_color, foreground=self.light_text)
+        style.configure("Info.TButton", background=self.info_color, foreground=self.light_text)
+
+        
+        style.configure("Treeview.Heading", font=("Segoe UI", 11, "bold"), background=self.border_color, foreground=self.dark_text, padding=(5, 8))
+        style.configure("Treeview", font=("Segoe UI", 10), rowheight=28, background=self.card_background, fieldbackground=self.card_background, foreground=self.dark_text, borderwidth=0)
+        style.map("Treeview", background=[('selected', self.secondary_color)], foreground=[('selected', self.light_text)])
+
+        
+        style.configure("Vertical.TScrollbar", troughcolor=self.background_color, background=self.secondary_color, borderwidth=0, arrowsize=15)
+        style.map("Vertical.TScrollbar",
+            background=[('active', self.primary_color)]
+        )
+
 
     def configurar_todas_as_telas(self):
         self.configurar_tela_login()
         self.configurar_tela_cadastro()
         self.configurar_tela_principal()
-        self.configurar_tela_perfil()
+        self.configurar_tela_perfil() 
         self.configurar_tela_investimento()
         self.configurar_tela_imovel1()
         self.configurar_tela_imovel2()
-        self.configurar_tela_listar_imovel1()
-        self.configurar_tela_listar_imovel2()
+        self.configurar_tela_imovel3()
 
     def mostrar_tela(self, nome_tela):
         tela = self.telas[nome_tela]
         tela.tkraise()
+        if nome_tela == "tela_perfil":
+            self.atualizar_tela_perfil()
+        elif nome_tela == "tela_listar_imovel1":
+            self.configurar_tela_listar_imovel1()
+        elif nome_tela == "tela_listar_imovel2":
+            self.configurar_tela_listar_imovel2()
+        elif nome_tela == "tela_listar_imovel3":
+            self.configurar_tela_listar_imovel3()
 
     def configurar_tela_login(self):
         tela_login = self.telas["tela_login"]
-        frame_login = tk.Frame(tela_login, bg="#f0f0f0", padx=30, pady=30, relief="groove", bd=2)
+        frame_login = ttk.Frame(tela_login, style="Card.TFrame", padding=40)
         frame_login.place(relx=0.5, rely=0.5, anchor="center")
 
-        titulo = tk.Label(frame_login, text="Login", font=("Arial", 18, "bold"), bg="#f0f0f0", fg="#333333")
-        titulo.grid(row=0, column=0, columnspan=2, pady=15)
+        ttk.Label(frame_login, text="Bem-vindo ao INVESTFACIL", style="Title.TLabel", background=self.card_background, foreground=self.primary_color).grid(row=0, column=0, columnspan=2, pady=(0, 25))
+        ttk.Label(frame_login, text="Faça Login para Continuar", style="Subtitle.TLabel", background=self.card_background, foreground=self.dark_text).grid(row=1, column=0, columnspan=2, pady=(0, 20))
 
-        tk.Label(frame_login, text="CPF:", font=("Arial", 12), bg="#f0f0f0").grid(row=1, column=0, sticky="e", pady=8, padx=5)
-        self.cpf_login_entry = tk.Entry(frame_login, width=30, font=("Arial", 12), relief="solid", bd=1)
-        self.cpf_login_entry.grid(row=1, column=1, sticky="w", pady=8, padx=5)
+        ttk.Label(frame_login, text="CPF:", style="Info.TLabel").grid(row=2, column=0, sticky="e", pady=10, padx=10)
+        self.cpf_login_entry = ttk.Entry(frame_login, width=35)
+        self.cpf_login_entry.grid(row=2, column=1, sticky="w", pady=10, padx=10)
 
-        tk.Label(frame_login, text="Senha:", font=("Arial", 12), bg="#f0f0f0").grid(row=2, column=0, sticky="e", pady=8, padx=5)
-        self.senha_login_entry = tk.Entry(frame_login, width=30, show="*", font=("Arial", 12), relief="solid", bd=1)
-        self.senha_login_entry.grid(row=2, column=1, sticky="w", pady=8, padx=5)
+        ttk.Label(frame_login, text="Senha:", style="Info.TLabel").grid(row=3, column=0, sticky="e", pady=10, padx=10)
+        self.senha_login_entry = ttk.Entry(frame_login, width=35, show="*")
+        self.senha_login_entry.grid(row=3, column=1, sticky="w", pady=10, padx=10)
 
-        btn_logar = tk.Button(frame_login, text="Entrar", command=self.processar_login,
-                              font=("Arial", 13, "bold"), bg="#4CAF50", fg="white", relief="raised", bd=3, width=20)
-        btn_logar.grid(row=3, column=0, columnspan=2, pady=15, sticky="ew")
+        ttk.Button(frame_login, text="Entrar", command=self.processar_login, style="Primary.TButton").grid(row=4, column=0, columnspan=2, pady=(25, 10), sticky="ew")
 
-        btn_cadastrar = tk.Button(frame_login, text="Não tem conta? Cadastre-se agora!", command=lambda: self.mostrar_tela("tela_cadastro"),
-                                  font=("Arial", 10), bg="#2196F3", fg="white", relief="flat", bd=0)
-        btn_cadastrar.grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
+        ttk.Button(frame_login, text="Não tem conta? Cadastre-se!", command=lambda: self.mostrar_tela("tela_cadastro"),
+                                  style="Secondary.TButton").grid(row=5, column=0, columnspan=2, pady=(5, 0), sticky="ew")
 
     def configurar_tela_cadastro(self):
         tela_cadastro = self.telas["tela_cadastro"]
-        frame_cadastro = tk.Frame(tela_cadastro, bg="#f0f0f0", padx=30, pady=30, relief="groove", bd=2)
+        frame_cadastro = ttk.Frame(tela_cadastro, style="Card.TFrame", padding=40)
         frame_cadastro.place(relx=0.5, rely=0.5, anchor="center")
 
-        titulo = tk.Label(frame_cadastro, text="Cadastro de Novo Usuário", font=("Arial", 18, "bold"), bg="#f0f0f0", fg="#333333")
-        titulo.grid(row=0, column=0, columnspan=2, pady=15)
+        ttk.Label(frame_cadastro, text="Crie Sua Conta Grátis", style="Title.TLabel", background=self.card_background, foreground=self.primary_color).grid(row=0, column=0, columnspan=2, pady=(0, 25))
 
-        # Nome
-        tk.Label(frame_cadastro, text="Nome Completo:", font=("Arial", 12), bg="#f0f0f0").grid(row=1, column=0, sticky="e", pady=8, padx=5)
-        self.nome_cadastro_entry = tk.Entry(frame_cadastro, width=30, font=("Arial", 12), relief="solid", bd=1)
+        ttk.Label(frame_cadastro, text="Nome Completo:", style="Info.TLabel").grid(row=1, column=0, sticky="e", pady=8, padx=10)
+        self.nome_cadastro_entry = ttk.Entry(frame_cadastro, width=35)
         self.nome_cadastro_entry.grid(row=1, column=1, sticky="w", pady=8, padx=10)
 
-        # CPF
-        tk.Label(frame_cadastro, text="CPF:", font=("Arial", 12), bg="#f0f0f0").grid(row=2, column=0, sticky="e", pady=8, padx=5)
-        self.cpf_cadastro_entry = tk.Entry(frame_cadastro, width=30, font=("Arial", 12), relief="solid", bd=1)
+        ttk.Label(frame_cadastro, text="CPF:", style="Info.TLabel").grid(row=2, column=0, sticky="e", pady=8, padx=10)
+        self.cpf_cadastro_entry = ttk.Entry(frame_cadastro, width=35)
         self.cpf_cadastro_entry.grid(row=2, column=1, sticky="w", pady=8, padx=10)
 
-        # Contato
-        tk.Label(frame_cadastro, text="Contato:", font=("Arial", 12), bg="#f0f0f0").grid(row=3, column=0, sticky="e", pady=8, padx=5)
-        self.contato_cadastro_entry = tk.Entry(frame_cadastro, width=30, font=("Arial", 12), relief="solid", bd=1)
+        ttk.Label(frame_cadastro, text="Contato (Email):", style="Info.TLabel").grid(row=3, column=0, sticky="e", pady=8, padx=10)
+        self.contato_cadastro_entry = ttk.Entry(frame_cadastro, width=35)
         self.contato_cadastro_entry.grid(row=3, column=1, sticky="w", pady=8, padx=10)
 
-        # Senha
-        tk.Label(frame_cadastro, text="Senha:", font=("Arial", 12), bg="#f0f0f0").grid(row=4, column=0, sticky="e", pady=8, padx=5)
-        self.senha_cadastro_entry = tk.Entry(frame_cadastro, width=30, show="*", font=("Arial", 12), relief="solid", bd=1)
+        ttk.Label(frame_cadastro, text="Senha:", style="Info.TLabel").grid(row=4, column=0, sticky="e", pady=8, padx=10)
+        self.senha_cadastro_entry = ttk.Entry(frame_cadastro, width=35, show="*")
         self.senha_cadastro_entry.grid(row=4, column=1, sticky="w", pady=8, padx=10)
+        ttk.Button(frame_cadastro, text="Finalizar Cadastro", command=self.processar_cadastro, style="Accent.TButton").grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(20, 10))
 
-        # Botões
-        btn_cadastrar = tk.Button(frame_cadastro, text="Finalizar Cadastro", command=self.cadastrar_usuario,
-                                  font=("Arial", 13, "bold"), bg="#FF9800", fg="white", relief="raised", bd=3)
-        btn_cadastrar.grid(row=5, column=0, columnspan=2, pady=(20, 10), sticky="ew")
-
-        btn_voltar = tk.Button(frame_cadastro, text="Voltar para Login", command=lambda: self.mostrar_tela("tela_login"),
-                               font=("Arial", 10), bg="#607D8B", fg="white", relief="flat", bd=0)
-        btn_voltar.grid(row=6, column=0, columnspan=2, pady=(0, 10), sticky="ew")
+        ttk.Button(frame_cadastro, text="Voltar para Login", command=lambda: self.mostrar_tela("tela_login"),
+                                     style="Info.TButton").grid(row=6, column=0, columnspan=2, pady=(0, 0), sticky="ew")
 
     def processar_login(self):
         cpf = self.cpf_login_entry.get()
@@ -164,118 +180,356 @@ class Sistemainvestimento:
             messagebox.showerror("Erro de Login", "CPF e Senha são obrigatórios.")
             return
 
+        if not is_cpf_valido(cpf):
+            messagebox.showerror("Erro de Login", "O CPF inserido não é válido. Verifique o formato e os dígitos.")
+            return
+
         usuario = verificar_login_db(cpf, senha)
-
         if usuario:
-            messagebox.showinfo("Login bem-sucedido", f"Bem-vindo(a), {usuario.nome.split()[0]}!")
+            self.current_user = usuario
+            messagebox.showinfo("Login", "Login bem-sucedido!")
             self.mostrar_tela("tela_principal")
+            self.atualizar_tela_principal()
+            self.cpf_login_entry.delete(0, tk.END)
+            self.senha_login_entry.delete(0, tk.END)
         else:
-            messagebox.showerror("Erro de Login", "CPF ou Senha inválidos.")
+            messagebox.showerror("Erro de Login", "CPF ou senha inválidos.")
 
-    def cadastrar_usuario(self):
+    def processar_cadastro(self):
         nome = self.nome_cadastro_entry.get()
         cpf = self.cpf_cadastro_entry.get()
         contato = self.contato_cadastro_entry.get()
         senha = self.senha_cadastro_entry.get()
+        valido, msg = is_nome_valido(nome)
+        if not valido:
+            messagebox.showerror("Erro de Cadastro", msg)
+            return
 
-        if not nome or not cpf or not contato or not senha:
-            messagebox.showerror("Erro de Cadastro", "Todos os campos são obrigatórios.")
+        if not is_cpf_valido(cpf):
+            messagebox.showerror("Erro de Cadastro", "O CPF inserido não é válido. Verifique o formato e os dígitos.")
+            return
+            
+        valido, msg = is_contato_valido(contato)
+        if not valido:
+            messagebox.showerror("Erro de Cadastro", msg)
             return
         novo_usuario, mensagem = criar_usuario_db(nome, cpf, contato, senha)
 
         if novo_usuario:
             messagebox.showinfo("Sucesso", mensagem)
+            self.mostrar_tela("tela_login")
             self.nome_cadastro_entry.delete(0, tk.END)
             self.cpf_cadastro_entry.delete(0, tk.END)
             self.contato_cadastro_entry.delete(0, tk.END)
             self.senha_cadastro_entry.delete(0, tk.END)
-            self.mostrar_tela("tela_login")
         else:
             messagebox.showerror("Erro de Cadastro", mensagem)
 
     def configurar_tela_principal(self):
         tela_principal = self.telas["tela_principal"]
-        frame_principal = tk.Frame(tela_principal, bg="#f0f0f0")
+        frame_principal = ttk.Frame(tela_principal, style="Card.TFrame", padding=50)
         frame_principal.place(relx=0.5, rely=0.5, anchor="center")
 
-        titulo = tk.Label(frame_principal, text="INVESTFACIL", font=("Arial", 24, "bold"), bg="#f0f0f0")
-        titulo.grid(row=0, column=0, columnspan=3, pady=20)
+        ttk.Label(frame_principal, text="INVESTFACIL", style="Title.TLabel", background=self.card_background, foreground=self.primary_color).grid(row=0, column=0, columnspan=3, pady=(0, 30))
 
-        btn_perfil = tk.Button(frame_principal, text="Meu Perfil", width=15, command=lambda: self.mostrar_tela("tela_perfil"))
-        btn_perfil.grid(row=1, column=0, pady=10, padx=10)
+        button_width = 25 
 
-        btn_investimento = tk.Button(frame_principal, text="Investimentos", width=15, command=lambda: self.mostrar_tela("tela_investimento"))
-        btn_investimento.grid(row=1, column=1, pady=10, padx=10)
-        
-        btn_saibamais = tk.Button(frame_principal, text="Saiba Mais", width=15, command=self.saiba_mais)
-        btn_saibamais.grid(row=1, column=2, pady=10, padx=10)
+        ttk.Button(frame_principal, text="Meu Perfil", style="Primary.TButton", width=button_width, command=lambda: self.mostrar_tela("tela_perfil")).grid(row=1, column=0, pady=15, padx=15)
+        ttk.Button(frame_principal, text="Investimentos", style="Primary.TButton", width=button_width, command=lambda: self.mostrar_tela("tela_investimento")).grid(row=1, column=1, pady=15, padx=15)
+        ttk.Button(frame_principal, text="Saiba Mais", style="Primary.TButton", width=button_width, command=self.saiba_mais).grid(row=1, column=2, pady=15, padx=15)
 
-        btn_sair = tk.Button(frame_principal, text="Sair", command=lambda: self.mostrar_tela("tela_login"))
-        btn_sair.grid(row=2, column=0, columnspan=3, pady=20)
+        ttk.Button(frame_principal, text="Sair", style="Danger.TButton", width=button_width, command=self.fazer_logout).grid(row=2, column=0, columnspan=3, pady=(30,0))
+
+    def fazer_logout(self):
+        self.current_user = None
+        messagebox.showinfo("Logout", "Você foi desconectado com sucesso.")
+        self.mostrar_tela("tela_login")
 
     def configurar_tela_perfil(self):
         tela_perfil = self.telas["tela_perfil"]
-        frame_perfil = tk.Frame(tela_perfil, bg="#f0f0f0")
-        frame_perfil.place(relx=0.5, rely=0.5, anchor="center")
-        titulo = tk.Label(frame_perfil, text="Meu Perfil", font=("Arial", 16, "bold"), bg="#f0f0f0").pack(pady=10)
-        label_info = tk.Label(frame_perfil, text="Aqui serão exibidos os seus investimentos.", font=("Arial", 10), bg="#f0f0f0").pack(pady=20, padx=20)
-        btn_voltar = tk.Button(frame_perfil, text="Voltar", command=lambda: self.mostrar_tela("tela_principal")).pack(pady=10)
+        for widget in tela_perfil.winfo_children():
+            widget.destroy()
+
+        main_frame = ttk.Frame(tela_perfil, style="Content.TFrame", padding=20)
+        main_frame.pack(fill="both", expand=True)
+        main_frame.grid_rowconfigure(0, weight=0) 
+        main_frame.grid_rowconfigure(1, weight=0) 
+        main_frame.grid_rowconfigure(2, weight=1) 
+        main_frame.grid_rowconfigure(3, weight=0) 
+        main_frame.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(main_frame, text="Meu Perfil de Investidor", style="Title.TLabel", background=self.background_color, foreground=self.primary_color).grid(row=0, column=0, pady=(0, 25), sticky="ew")
+
+        if self.current_user:
+            info_frame = ttk.LabelFrame(main_frame, text="Suas Informações", style="Card.TFrame", padding=20)
+            info_frame.grid(row=1, column=0, pady=15, padx=20, sticky="ew")
+            info_frame.grid_columnconfigure(1, weight=1)
+
+            ttk.Label(info_frame, text="Nome:", style="Heading.TLabel").grid(row=0, column=0, sticky="w", pady=5, padx=5)
+            ttk.Label(info_frame, text=self.current_user.nome, style="Info.TLabel").grid(row=0, column=1, sticky="w", pady=5, padx=5)
+
+            ttk.Label(info_frame, text="CPF:", style="Heading.TLabel").grid(row=1, column=0, sticky="w", pady=5, padx=5)
+            ttk.Label(info_frame, text=self.current_user.cpf, style="Info.TLabel").grid(row=1, column=1, sticky="w", pady=5, padx=5)
+
+            ttk.Label(info_frame, text="Contato (Email):", style="Heading.TLabel").grid(row=2, column=0, sticky="w", pady=10, padx=5)
+            self.contato_perfil_entry = ttk.Entry(info_frame, width=45)
+            self.contato_perfil_entry.insert(0, self.current_user.contato)
+            self.contato_perfil_entry.grid(row=2, column=1, sticky="ew", padx=5)
+            ttk.Button(info_frame, text="Atualizar Contato", command=self.atualizar_contato, style="Secondary.TButton", width=20).grid(row=2, column=2, padx=10, sticky="e")
+
+            compras_frame = ttk.LabelFrame(main_frame, text="Minhas Semanas Adquiridas", style="Card.TFrame", padding=20)
+            compras_frame.grid(row=2, column=0, pady=25, padx=20, sticky="nsew")
+            compras_frame.grid_rowconfigure(0, weight=1)
+            compras_frame.grid_columnconfigure(0, weight=1)
+
+            colunas = ('id', 'imovel', 'semana_numero', 'periodo', 'valor_pago', 'data_compra')
+            self.tabela_compras = ttk.Treeview(compras_frame, columns=colunas, show='headings', style="Treeview")
+
+            self.tabela_compras.heading('id', text='ID', anchor='center')
+            self.tabela_compras.heading('imovel', text='Imóvel', anchor='w')
+            self.tabela_compras.heading('semana_numero', text='Semana Nº', anchor='center')
+            self.tabela_compras.heading('periodo', text='Período de Uso', anchor='center')
+            self.tabela_compras.heading('valor_pago', text='Valor Pago (R$)', anchor='e')
+            self.tabela_compras.heading('data_compra', text='Data da Compra', anchor='center')
+
+            self.tabela_compras.column('id', width=60, anchor='center', stretch=False)
+            self.tabela_compras.column('imovel', width=250, anchor='w')
+            self.tabela_compras.column('semana_numero', width=90, anchor='center')
+            self.tabela_compras.column('periodo', width=150, anchor='center')
+            self.tabela_compras.column('valor_pago', width=130, anchor='e')
+            self.tabela_compras.column('data_compra', width=150, anchor='center')
+
+            self.tabela_compras.grid(row=0, column=0, sticky="nsew", pady=(0, 15), padx=(0, 5))
+
+            scrollbar = ttk.Scrollbar(compras_frame, orient="vertical", command=self.tabela_compras.yview, style="Vertical.TScrollbar")
+            scrollbar.grid(row=0, column=1, sticky="ns", pady=(0, 15))
+            self.tabela_compras.configure(yscrollcommand=scrollbar.set)
+
+            ttk.Button(compras_frame, text="Disponibilizar Semana para Venda",
+                                          command=self.desfazer_compra_semana,
+                                          style="Danger.TButton", width=30).grid(row=1, column=0, columnspan=2, pady=(10, 0), sticky="ew")
+            self.atualizar_tabela_compras()
+
+        else:
+            ttk.Label(main_frame, text="Nenhum usuário logado. Por favor, faça login.",
+                      font=("Segoe UI", 12), background=self.background_color, foreground=self.dark_text).grid(row=2, column=0, pady=50, sticky="nsew")
+        ttk.Button(main_frame, text="Voltar ao Painel", command=lambda: self.mostrar_tela("tela_principal"),
+                               style="Info.TButton", width=30).grid(row=3, column=0, pady=(30, 0), sticky="ew")
+
+
+    def atualizar_tela_perfil(self):
+        self.configurar_tela_perfil()
+    def atualizar_contato(self):
+        if not self.current_user:
+            messagebox.showerror("Erro", "Nenhum usuário logado.")
+            return
+
+        novo_contato = self.contato_perfil_entry.get()
+        if not novo_contato:
+            messagebox.showerror("Erro", "O contato não pode ser vazio.")
+            return
+
+        sucesso, mensagem = atualizar_contato_usuario_db(self.current_user.id, novo_contato)
+        if sucesso:
+            self.current_user.contato = novo_contato
+            messagebox.showinfo("Sucesso", mensagem)
+        else:
+            messagebox.showerror("Erro", mensagem)
+
+    def atualizar_tabela_compras(self):
+        for item in self.tabela_compras.get_children():
+            self.tabela_compras.delete(item)
+
+        if self.current_user:
+            transacoes = get_transacoes_usuario_db(self.current_user.id)
+            for transacao in transacoes:
+                imovel_nome = ""
+                semana_periodo = ""
+                semana_numero = ""
+                semana_id = ""
+
+                if transacao.semana and transacao.semana.imovel:
+                    imovel_geral = {
+                        1: "ZenithPlace",
+                        2: "Topázio Imperial Hotel",
+                        3: "Petra Palace"
+                    }
+                    imovel_nome = imovel_geral.get(transacao.semana.imovel.id, transacao.semana.imovel.endereco)
+                    semana_periodo = transacao.semana.periodo
+                    semana_numero = transacao.semana.numero_semana
+                    semana_id = transacao.semana.id
+
+                self.tabela_compras.insert('', 'end', values=(
+                    semana_id,
+                    imovel_nome,
+                    semana_numero,
+                    semana_periodo,
+                    f"{transacao.valor_pago:,.2f}".replace('.', ','),
+                    transacao.data_compra
+                ), iid=str(semana_id))
+
+    def desfazer_compra_semana(self):
+        if not self.current_user:
+            messagebox.showerror("Erro", "Você precisa estar logado.")
+            return
+
+        selected_item = self.tabela_compras.selection()
+        if not selected_item:
+            messagebox.showwarning("Atenção", "Selecione uma semana na tabela para disponibilizá-la.")
+            return
+        semana_id_str = selected_item[0]
+        try:
+            semana_id = int(semana_id_str)
+        except ValueError:
+            messagebox.showerror("Erro", "Não foi possível identificar a semana selecionada.")
+            return
+        row_values = self.tabela_compras.item(selected_item[0], 'values')
+        imovel_nome = row_values[1]
+        semana_numero = row_values[2]
+        semana_periodo = row_values[3]
+
+        confirm = messagebox.askyesno(
+            "Confirmar Disponibilização",
+            f"Você tem certeza que deseja disponibilizar a Semana Nº ({semana_periodo}) do imóvel {imovel_nome} para venda novamente?\n"
+            "Esta ação é irreversível e removerá seu registro de compra."
+        )
+
+        if confirm:
+            sucesso, mensagem = desfazer_compra_semana_db(self.current_user.id, semana_id)
+            if sucesso:
+                messagebox.showinfo("Sucesso", mensagem)
+                self.atualizar_tabela_compras()
+                self.configurar_tela_listar_imovel1()
+                self.configurar_tela_listar_imovel2()
+                self.configurar_tela_listar_imovel3()
+
+            else:
+                messagebox.showerror("Erro", mensagem)
 
     def configurar_tela_investimento(self):
         tela_investimento = self.telas["tela_investimento"]
-        frame_investimento = tk.Frame(tela_investimento, bg="#f0f0f0")
+        frame_investimento = ttk.Frame(tela_investimento, style="Card.TFrame", padding=40)
         frame_investimento.place(relx=0.5, rely=0.5, anchor="center")
-        titulo = tk.Label(frame_investimento, text="Escolha o Empreendimento", font=("Arial", 16, "bold"), bg="#f0f0f0").pack(pady=10)
-        btn_imovel1 = tk.Button(frame_investimento, text="Imóvel 1 - ZenithPlace", width=30, command=lambda: self.mostrar_tela("tela_imovel1")).pack(pady=10, padx=20)
-        btn_imovel2 = tk.Button(frame_investimento, text="Imóvel 2 - Topázio Imperial Hotel", width=30, command=lambda: self.mostrar_tela("tela_imovel2")).pack(pady=10, padx=20)
-        btn_voltar = tk.Button(frame_investimento, text="Voltar", command=lambda: self.mostrar_tela("tela_principal")).pack(pady=20)
+
+        ttk.Label(frame_investimento, text="Explore Nossos Empreendimentos", style="Subtitle.TLabel", background=self.card_background, foreground=self.dark_text).pack(pady=(0, 20))
+
+        button_width = 35
+
+        ttk.Button(frame_investimento, text="Imóvel 1 - ZenithPlace", style="Primary.TButton", width=button_width, command=lambda: self.mostrar_tela("tela_imovel1")).pack(pady=10, padx=20)
+        ttk.Button(frame_investimento, text="Imóvel 2 - Topázio Imperial Hotel", style="Primary.TButton", width=button_width, command=lambda: self.mostrar_tela("tela_imovel2")).pack(pady=10, padx=20)
+        ttk.Button(frame_investimento, text="Imóvel 3 - Petra Palace", style="Primary.TButton", width=button_width, command=lambda: self.mostrar_tela("tela_imovel3")).pack(pady=10, padx=20)
+        ttk.Button(frame_investimento, text="Voltar ao Painel", style="Info.TButton", width=button_width, command=lambda: self.mostrar_tela("tela_principal")).pack(pady=(30,0))
 
     def configurar_tela_imovel1(self):
         tela_imovel1 = self.telas["tela_imovel1"]
-        frame_imovel1 = tk.Frame(tela_imovel1, bg="#f0f0f0")
+        for widget in tela_imovel1.winfo_children(): widget.destroy()
+        frame_imovel1 = ttk.Frame(tela_imovel1, style="Card.TFrame", padding=30)
         frame_imovel1.place(relx=0.5, rely=0.5, anchor="center")
-        titulo = tk.Label(frame_imovel1, text="ZenithPlace", font=("Arial", 16, "bold"), bg="#f0f0f0").pack(pady=10)
-        descricao = tk.Label(frame_imovel1, text="Descrição do Imóvel ZenithPlace.", justify="center", bg="#f0f0f0").pack(pady=10, padx=20)
-        btn_listar = tk.Button(frame_imovel1, text="Listar Semanas Disponíveis", command=lambda: self.mostrar_tela("tela_listar_imovel1")).pack(pady=20)
-        btn_voltar = tk.Button(frame_imovel1, text="Voltar", command=lambda: self.mostrar_tela("tela_investimento")).pack(pady=10)
+        ttk.Label(frame_imovel1, text="ZenithPlace", style="Subtitle.TLabel", background=self.card_background, foreground=self.primary_color).pack(pady=10)
+        ttk.Label(frame_imovel1, text="Um refúgio de luxo no coração da cidade.\nCom 3 quartos espaçosos, 2 banheiros e 120m² de área.\nAvaliação: Excelente. Ideal para sua família.", justify="center", background=self.card_background, font=("Segoe UI", 11)).pack(pady=15, padx=30)
+        ttk.Button(frame_imovel1, text="Ver Semanas Disponíveis", style="Primary.TButton", command=lambda: self.mostrar_tela("tela_listar_imovel1")).pack(pady=25)
+        ttk.Button(frame_imovel1, text="Voltar para Empreendimentos", style="Info.TButton", command=lambda: self.mostrar_tela("tela_investimento")).pack(pady=10)
 
     def configurar_tela_imovel2(self):
         tela_imovel2 = self.telas["tela_imovel2"]
-        frame_imovel2 = tk.Frame(tela_imovel2, bg="#f0f0f0")
+        for widget in tela_imovel2.winfo_children(): widget.destroy()
+        frame_imovel2 = ttk.Frame(tela_imovel2, style="Card.TFrame", padding=30)
         frame_imovel2.place(relx=0.5, rely=0.5, anchor="center")
-        titulo = tk.Label(frame_imovel2, text="Topázio Imperial Hotel", font=("Arial", 16, "bold"), bg="#f0f0f0").pack(pady=10)
-        descricao = tk.Label(frame_imovel2, text="Descrição do Topázio Imperial Hotel.", justify="center", bg="#f0f0f0").pack(pady=10, padx=20)
-        btn_listar = tk.Button(frame_imovel2, text="Listar Semanas Disponíveis", command=lambda: self.mostrar_tela("tela_listar_imovel2")).pack(pady=20)
-        btn_voltar = tk.Button(frame_imovel2, text="Voltar", command=lambda: self.mostrar_tela("tela_investimento")).pack(pady=10)
+        ttk.Label(frame_imovel2, text="Topázio Imperial Hotel", style="Subtitle.TLabel", background=self.card_background, foreground=self.primary_color).pack(pady=10)
+        ttk.Label(frame_imovel2, text="Invista em uma suíte exclusiva de 40m² com 1 quarto e 1 banheiro.\nLocalização privilegiada na Avenida Beira Mar. Avaliação: Muito Bom.\nPerfeito para investimento hoteleiro com retornos sólidos.", justify="center", background=self.card_background, font=("Segoe UI", 11)).pack(pady=15, padx=30)
+        ttk.Button(frame_imovel2, text="Ver Semanas Disponíveis", style="Primary.TButton", command=lambda: self.mostrar_tela("tela_listar_imovel2")).pack(pady=25)
+        ttk.Button(frame_imovel2, text="Voltar para Empreendimentos", style="Info.TButton", command=lambda: self.mostrar_tela("tela_investimento")).pack(pady=10)
+
+    def configurar_tela_imovel3(self):
+        tela_imovel3 = self.telas["tela_imovel3"]
+        for widget in tela_imovel3.winfo_children(): widget.destroy()
+        frame_imovel3 = ttk.Frame(tela_imovel3, style="Card.TFrame", padding=30)
+        frame_imovel3.place(relx=0.5, rely=0.5, anchor="center")
+        ttk.Label(frame_imovel3, text="Petra Palace", style="Subtitle.TLabel", background=self.card_background, foreground=self.primary_color).pack(pady=10)
+        ttk.Label(frame_imovel3, text="Residência de alto padrão com 4 quartos, 3 banheiros e 180m².\nLocalizada na desejada Rua das Acácias, Morro Azul.\nAvaliação: Ótima Localização. O ápice do conforto e espaço.", justify="center", background=self.card_background, font=("Segoe UI", 11)).pack(pady=15, padx=30)
+        ttk.Button(frame_imovel3, text="Ver Semanas Disponíveis", style="Primary.TButton", command=lambda: self.mostrar_tela("tela_listar_imovel3")).pack(pady=25)
+        ttk.Button(frame_imovel3, text="Voltar para Empreendimentos", style="Info.TButton", command=lambda: self.mostrar_tela("tela_investimento")).pack(pady=10)
+
+    def configurar_tela_listar(self, tela_name, imovel_id, imovel_title, return_tela_name):
+        tela_listar = self.telas[tela_name]
+        for widget in tela_listar.winfo_children(): widget.destroy()
+        frame_listar = ttk.Frame(tela_listar, style="Content.TFrame", padding=20)
+        frame_listar.pack(fill="both", expand=True)
+        frame_listar.grid_rowconfigure(1, weight=1)
+        frame_listar.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(frame_listar, text=f"Semanas Disponíveis - {imovel_title}", style="Subtitle.TLabel", background=self.background_color, foreground=self.dark_text).grid(row=0, column=0, pady=(0, 15), sticky="ew")
+
+        colunas = ('id', 'semana', 'periodo', 'valor')
+        tabela = ttk.Treeview(frame_listar, columns=colunas, show='headings', style="Treeview")
+        tabela.heading('id', text='ID', anchor='center')
+        tabela.heading('semana', text='Semana Nº', anchor='center')
+        tabela.heading('periodo', text='Período de Uso', anchor='center')
+        tabela.heading('valor', text='Valor da Cota (R$)', anchor='e')
+
+        tabela.column('id', width=60, anchor='center', stretch=False)
+        tabela.column('semana', width=100, anchor='center')
+        tabela.column('periodo', width=200, anchor='center')
+        tabela.column('valor', width=150, anchor='e')
+
+        semanas_disponiveis = get_semanas_disponiveis(imovel_id)
+        for semana in semanas_disponiveis:
+            tabela.insert('', 'end', values=(semana.id, semana.numero_semana, semana.periodo, f"{semana.valor_cota:,.2f}".replace('.', ',')), iid=str(semana.id))
+        tabela.grid(row=1, column=0, sticky="nsew", pady=(0, 15), padx=(0, 5))
+
+        scrollbar = ttk.Scrollbar(frame_listar, orient="vertical", command=tabela.yview, style="Vertical.TScrollbar")
+        scrollbar.grid(row=1, column=1, sticky="ns", pady=(0, 15))
+        tabela.configure(yscrollcommand=scrollbar.set)
+
+        ttk.Button(frame_listar, text="Comprar Semana Selecionada",
+                                command=lambda: self.processar_compra_semana(tabela, imovel_id), style="Primary.TButton").grid(row=2, column=0, pady=(10, 5), sticky="ew")
+
+        ttk.Button(frame_listar, text="Voltar", command=lambda: self.mostrar_tela(return_tela_name), style="Info.TButton").grid(row=3, column=0, pady=5, sticky="ew")
+
 
     def configurar_tela_listar_imovel1(self):
-        tela_listar = self.telas["tela_listar_imovel1"]
-        for widget in tela_listar.winfo_children(): widget.destroy() # Limpa a tela antes de recriar
-        frame_listar = tk.Frame(tela_listar, pady=20, bg="#f0f0f0")
-        frame_listar.pack(fill="both", expand=True)
-        titulo = tk.Label(frame_listar, text="Semanas Disponíveis - ZenithPlace", font=("Arial", 16, "bold"), bg="#f0f0f0").pack(pady=10)
-        colunas = ('semana', 'periodo', 'valor')
-        tabela = ttk.Treeview(frame_listar, columns=colunas, show='headings')
-        tabela.heading('semana', text='Semana Nº'); tabela.heading('periodo', text='Período'); tabela.heading('valor', text='Valor da Cota (R$)')
-        semanas_imovel1 = [('15', '12/04 - 19/04', '15.000,00'), ('22', '31/05 - 07/06', '18.000,00'), ('35', '30/08 - 06/09', '22.000,00')]
-        for semana in semanas_imovel1: tabela.insert('', 'end', values=semana)
-        tabela.pack(pady=10, padx=20, fill="both", expand=True)
-        btn_voltar = tk.Button(frame_listar, text="Voltar", command=lambda: self.mostrar_tela("tela_imovel1")).pack(pady=10)
+        self.configurar_tela_listar("tela_listar_imovel1", 1, "ZenithPlace", "tela_imovel1")
 
     def configurar_tela_listar_imovel2(self):
-        tela_listar = self.telas["tela_listar_imovel2"]
-        for widget in tela_listar.winfo_children(): widget.destroy()
-        frame_listar = tk.Frame(tela_listar, pady=20, bg="#f0f0f0")
-        frame_listar.pack(fill="both", expand=True)
-        titulo = tk.Label(frame_listar, text="Semanas Disponíveis - Topázio Imperial Hotel", font=("Arial", 16, "bold"), bg="#f0f0f0").pack(pady=10)
-        colunas = ('semana', 'periodo', 'valor')
-        tabela = ttk.Treeview(frame_listar, columns=colunas, show='headings')
-        tabela.heading('semana', text='Semana Nº'); tabela.heading('periodo', text='Período'); tabela.heading('valor', text='Valor da Cota (R$)')
-        semanas_imovel2 = [('28', '12/07 - 19/07', '35.000,00'), ('29', '19/07 - 26/07', '35.000,00'), ('41', '11/10 - 18/10', '28.000,00')]
-        for semana in semanas_imovel2: tabela.insert('', 'end', values=semana)
-        tabela.pack(pady=10, padx=20, fill="both", expand=True)
-        btn_voltar = tk.Button(frame_listar, text="Voltar", command=lambda: self.mostrar_tela("tela_imovel2")).pack(pady=10)
-    
+        self.configurar_tela_listar("tela_listar_imovel2", 2, "Topázio Imperial Hotel", "tela_imovel2")
+
+    def configurar_tela_listar_imovel3(self):
+        self.configurar_tela_listar("tela_listar_imovel3", 3, "Petra Palace", "tela_imovel3")
+
+
+    def processar_compra_semana(self, tabela, imovel_id):
+        if not self.current_user:
+            messagebox.showerror("Erro", "Você precisa estar logado para comprar uma semana.")
+            return
+
+        selected_item = tabela.selection()
+        if not selected_item:
+            messagebox.showwarning("Atenção", "Selecione uma semana para comprar.")
+            return
+        semana_id = int(selected_item[0]) 
+        selected_item_data = tabela.item(selected_item[0])
+        row_values = selected_item_data['values']
+        semana_numero = row_values[0] 
+        semana_periodo = row_values[1]
+        semana_valor = row_values[3].replace(',', '.').replace('R$ ', '')
+
+        confirm = messagebox.askyesno("Confirmar Compra", f"Você deseja comprar a Semana Nº {semana_numero} ({semana_periodo}) por R$ {semana_valor}?")
+
+        if confirm:
+            sucesso, mensagem = comprar_semana_db(self.current_user.id, semana_id) 
+            if sucesso:
+                messagebox.showinfo("Sucesso", mensagem)
+                if imovel_id == 1:
+                    self.configurar_tela_listar_imovel1()
+                elif imovel_id == 2:
+                    self.configurar_tela_listar_imovel2()
+                elif imovel_id == 3: 
+                    self.configurar_tela_listar_imovel3() 
+                if self.telas["tela_perfil"].winfo_ismapped():
+                    self.atualizar_tela_perfil() 
+            else:
+                messagebox.showerror("Erro", mensagem)
+
     def saiba_mais(self):
         messagebox.showinfo("O que é Investimento Fracionado?",
         "Acredita que ter um imóvel de luxo está fora do seu alcance? Pense novamente!\n\n"
@@ -286,6 +540,7 @@ class Sistemainvestimento:
         "É a porta de entrada para um mercado exclusivo, com a flexibilidade e a rentabilidade que você sempre buscou.")
 
 if __name__ == "__main__":
+    inicializar_dados_imoveis()
     root = tk.Tk()
     app = Sistemainvestimento(root)
     root.mainloop()
